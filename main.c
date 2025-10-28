@@ -1,4 +1,14 @@
 // TODO: add the appropriate head files here
+#include <sys/time.h>
+#include <sys/wait.h>
+#include <sys/mman.h>
+#include <stdio.h>
+#include <unistd.h>
+#include "lab2.h"
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <errno.h>
 
 /************************************************************\
  * get_arguments - returns the command line arguments not
@@ -29,6 +39,7 @@ int main(int argc, char** argv)
     pid_t pid;
     int status;
     char* command = NULL;
+    (void)command;
     char** command_args = NULL;
     char* ipc_ptr = NULL; // pointer to shared memory
     struct timeval start_time;
@@ -41,6 +52,13 @@ int main(int argc, char** argv)
     
     // TODO: call ipc_create to create shared memory region to which parent
     //       child have access.
+    ipc_ptr = ipc_create(sizeof(struct timeval));
+    if (ipc_ptr == NULL){
+        fprintf(stderr, "Failed to create shared memory. \n");
+        return 2;
+    }
+    
+    struct timeval* shared_start = (struct timeval*)ipc_ptr;
 
     /* fork a child process */
     pid = fork();
@@ -51,23 +69,38 @@ int main(int argc, char** argv)
     }
     else if (pid == 0) { /*child process */
         // TODO: use gettimeofday to log the start time
+        struct timeval start_time;
+        
+        gettimeofday(&start_time, NULL);
+
 
         // TODO: write the time to the IPC
+        memcpy(shared_start, &start_time, sizeof(struct timeval));
         
         // TODO: get the list of arguments to be used in execvp() and 
         // execute execvp()
+        command_args = get_arguments(argc, argv);
+        execvp(command_args[0], command_args);
+
+        perror("execvp failed");
+        exit(1);
 
     }
     else { /* parent process */
         // TODO: have parent wait and get status of child.
-        //       Use the variable status to store status of child. 
+        //       Use the variable status to store status of child.
+        if (waitpid(pid, &status, 0) == -1){
+            perror("waitpid");
+            status = 4;
+        }
         
         // TODO: get the current time using gettimeofday
-        
+        gettimeofday(&current_time, NULL);
         // TODO: read the start time from IPC
-        
+        memcpy(&start_time, shared_start, sizeof(struct timeval));
         // TODO: close IPC
-
+        munmap(ipc_ptr, sizeof(struct timeval));
+        ipc_close();
         // NOTE: DO NOT ALTER THE LINE BELOW.
         printf("Elapsed time %.5f\n",elapsed_time(&start_time, &current_time));
     }
